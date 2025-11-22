@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAccount, useSignMessage } from 'wagmi';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { getApiUrl } from '@/lib/utils';
+import { ADMIN_WALLET_ADDRESS } from '@/config/admin';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -27,6 +26,20 @@ export default function AdminLogin() {
     setIsLoading(true);
     setError('');
     try {
+      // Validate wallet address locally
+      if (!address) {
+        setError('Please connect your wallet first.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (address.toLowerCase() !== ADMIN_WALLET_ADDRESS.toLowerCase()) {
+        setError('This wallet is not authorized for admin access.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Sign the message for verification
       const domain = window.location.host;
       const origin = window.location.origin;
       const statement = 'Sign in to CredentialPass as an administrator.';
@@ -45,22 +58,13 @@ Issued At: ${new Date().toISOString()}`;
 
       const signature = await signMessageAsync({ message });
 
-      // --- Backend Verification ---
-      const response = await axios.post(`${getApiUrl()}/api/admin/verify-signature`, { 
-        message, 
-        signature, 
-        address 
-      });
+      // Local validation passed, wallet is authorized
+      console.log("Admin sign-in successful:", { address, signature });
+      sessionStorage.setItem('isAdminLoggedIn', 'true');
+      sessionStorage.setItem('adminAddress', address);
+      sessionStorage.setItem('adminSignature', signature);
 
-      if (response.data.success) {
-        console.log("Admin sign-in successful:", { signature, message });
-        sessionStorage.setItem('isAdminLoggedIn', 'true');
-        sessionStorage.setItem('adminAddress', address || '');
-
-        navigate('/admin/dashboard');
-      } else {
-        setError('This wallet is not authorized for admin access.');
-      }
+      navigate('/admin/dashboard');
 
     } catch (err) {
       console.error("Admin sign-in error:", err);

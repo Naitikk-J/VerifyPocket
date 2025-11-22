@@ -10,15 +10,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from '@/components/ui/textarea';
 import { QRCodeSVG } from 'qrcode.react';
 import SHA256 from 'crypto-js/sha256';
-import axios from 'axios';
-import { getApiUrl } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface Certificate {
-    _id: string;
+    id: string;
     studentAddress: string;
+    studentName: string;
     course: string;
-    issuedAt: string;
+    instituteName: string;
+    issueDate: string;
     hash: string;
+    transactionId: string;
+    createdAt: Date;
 }
 
 interface CertificateResult {
@@ -41,14 +44,17 @@ export default function AdminDashboard() {
       navigate('/admin/login');
     } else {
       setAdminAddress(address);
-      fetchCredentials();
+      // Load certificates from localStorage
+      const savedCerts = localStorage.getItem('issuedCertificates');
+      if (savedCerts) {
+        try {
+          setRecords(JSON.parse(savedCerts));
+        } catch (e) {
+          console.warn('Could not load saved certificates');
+        }
+      }
     }
   }, [navigate]);
-  
-  const fetchCredentials = async () => {
-      const response = await axios.get(`${getApiUrl()}/api/credentials`);
-      setRecords(response.data);
-  };
 
   const handleLogout = () => {
     sessionStorage.removeItem('isAdminLoggedIn');
@@ -61,11 +67,11 @@ export default function AdminDashboard() {
     const formData = new FormData(e.currentTarget);
     const studentAddress = formData.get('studentAddress');
     console.log("Registering Student:", { studentAddress });
-    alert(`Student ${studentAddress} registered successfully (simulation).`);
+    toast.success(`Student ${studentAddress} registered successfully!`);
     e.currentTarget.reset();
   };
   
-  const handleIssueCertificate = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleIssueCertificate = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
@@ -73,7 +79,7 @@ export default function AdminDashboard() {
     const photoFile = formData.get('photoFile') as File;
 
     if (!certificateFile || certificateFile.size === 0 || !photoFile || photoFile.size === 0) {
-        alert("Please select both a certificate and a photo file.");
+        toast.error("Please select both a certificate and a photo file.");
         return;
     }
 
@@ -86,40 +92,59 @@ export default function AdminDashboard() {
         });
     };
 
-    try {
-        const certificateBase64 = await readFileAsBase64(certificateFile);
-        const photoBase64 = await readFileAsBase64(photoFile);
-        
+    // Use a promise wrapper to handle async file reading
+    Promise.all([
+        readFileAsBase64(certificateFile),
+        readFileAsBase64(photoFile)
+    ]).then(([certificateBase64, photoBase64]) => {
         const formEntries = Object.fromEntries(formData.entries());
 
         const textData: { [key: string]: any } = { ...formEntries };
         delete textData.certificateFile;
         delete textData.photoFile;
 
+        // Create a unique identifier combining form data + timestamp
         const dataToHash = {
-            ...textData,
-            certificate: certificateBase64,
-            photo: photoBase64,
+            studentAddress: textData.studentAddress,
+            studentName: textData.studentName,
+            courseName: textData.courseName,
+            instituteName: textData.instituteName,
+            issueDate: textData.issueDate,
+            timestamp: Date.now(),
         };
 
         const dataString = JSON.stringify(dataToHash) + `-${Date.now()}`;
         const certHash = SHA256(dataString).toString();
-        const transactionId = SHA256(certHash).toString();
+        const transactionId = SHA256(certHash + adminAddress).toString();
 
         const verifierUrl = `${window.location.origin}/verifier?certId=${certHash}`;
 
-        const payload = { ...textData, hash: certHash };
+        // Create certificate record
+        const newCertificate: Certificate = {
+            id: Math.random().toString(36).substring(7),
+            studentAddress: textData.studentAddress,
+            studentName: textData.studentName,
+            course: textData.courseName,
+            instituteName: textData.instituteName,
+            issueDate: textData.issueDate,
+            hash: certHash,
+            transactionId: transactionId,
+            createdAt: new Date(),
+        };
 
-        await axios.post(`${getApiUrl()}/api/credentials`, payload);
-        
+        // Save to local state and localStorage
+        const updatedRecords = [newCertificate, ...records];
+        setRecords(updatedRecords);
+        localStorage.setItem('issuedCertificates', JSON.stringify(updatedRecords));
+
+        // Show success result
         setCertificateResult({ certHash, qrUrl: verifierUrl, transactionId });
-        fetchCredentials();
+        toast.success("Certificate issued successfully!");
         e.currentTarget.reset();
-
-    } catch (error) {
-        console.error("Error issuing certificate:", error);
-        alert("Failed to issue certificate. An unexpected error occurred. Please check the console for details.");
-    }
+    }).catch(error => {
+        console.error("Error reading files:", error);
+        toast.error("Failed to read files. Please try again.");
+    });
   };
 
   if (!adminAddress) {
@@ -217,20 +242,30 @@ export default function AdminDashboard() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>Credential ID</TableHead>
-                            <TableHead>Student</TableHead>
+                            <TableHead>Student Name</TableHead>
                             <TableHead>Course</TableHead>
+                            <TableHead>Institution</TableHead>
                             <TableHead>Date Issued</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {records.map((rec) => (
-                            <TableRow key={rec._id}>
-                                <TableCell className='font-mono text-xs'>{rec.hash.slice(0,10)}...</TableCell>
-                                <TableCell className='font-mono text-xs'>{rec.studentAddress.slice(0,10)}...</TableCell>
-                                <TableCell>{rec.course}</TableCell>
-                                <TableCell>{new Date(rec.issuedAt).toLocaleDateString()}</TableCell>
+                        {records.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                                    No certificates issued yet
+                                </TableCell>
                             </TableRow>
-                        ))}
+                        ) : (
+                            records.map((rec) => (
+                                <TableRow key={rec.id}>
+                                    <TableCell className='font-mono text-xs'>{rec.hash.slice(0,8)}...</TableCell>
+                                    <TableCell>{rec.studentName}</TableCell>
+                                    <TableCell>{rec.course}</TableCell>
+                                    <TableCell>{rec.instituteName}</TableCell>
+                                    <TableCell>{new Date(rec.createdAt).toLocaleDateString()}</TableCell>
+                                </TableRow>
+                            ))
+                        )}
                     </TableBody>
                 </Table>
             </CardContent>
