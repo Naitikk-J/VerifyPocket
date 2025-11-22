@@ -15,6 +15,7 @@ export interface Certificate {
   issuedAt: string;
   txHash: string;
   isVerified: boolean;
+  category?: string;
 }
 
 interface CredentialCardProps {

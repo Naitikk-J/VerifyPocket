@@ -21,6 +21,7 @@ const MOCK_CERTIFICATES: Certificate[] = [
     issuedAt: '2024-10-15',
     txHash: '0x8f2c2e3a4b5c6d7e8f9a0b1c2d3e4f5g6h7i8j9k0l1m2n3o4p5q6r7s8t9u',
     isVerified: true,
+    category: 'Degree',
   },
   {
     id: '2',
@@ -31,6 +32,7 @@ const MOCK_CERTIFICATES: Certificate[] = [
     issuedAt: '2024-08-20',
     txHash: '0x9g3d3f4b5c6d7e8f9a0b1c2d3e4f5g6h7i8j9k0l1m2n3o4p5q6r7s8t9u',
     isVerified: true,
+    category: 'Certification',
   },
   {
     id: '3',
@@ -41,6 +43,7 @@ const MOCK_CERTIFICATES: Certificate[] = [
     issuedAt: '2024-06-10',
     txHash: '0xah4e4g5c6d7e8f9a0b1c2d3e4f5g6h7i8j9k0l1m2n3o4p5q6r7s8t9u',
     isVerified: true,
+    category: 'Course',
   },
 ];
 
@@ -55,6 +58,8 @@ interface DatabaseCertificate {
   issuedAt: string;
 }
 
+const CERTIFICATE_CATEGORIES = ['All', 'Degree', 'Certification', 'Course', 'Skill'];
+
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const { address } = useAccount();
@@ -63,6 +68,9 @@ export default function StudentDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [showEmptyState, setShowEmptyState] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [showVerifyTool, setShowVerifyTool] = useState(false);
 
   useEffect(() => {
     if (address) {
@@ -84,7 +92,7 @@ export default function StudentDashboard() {
         setCredentials([]);
       } else {
         setShowEmptyState(false);
-        const formattedCredentials: Certificate[] = userCredentials.map((cred) => ({
+        const formattedCredentials: Certificate[] = userCredentials.map((cred: any) => ({
           id: cred._id,
           title: cred.certificateTitle,
           issuer: cred.instituteName,
@@ -93,6 +101,7 @@ export default function StudentDashboard() {
           issuedAt: cred.issuedAt || cred.issueDate,
           txHash: cred.hash,
           isVerified: true,
+          category: cred.category || 'Course',
         }));
         setCredentials(formattedCredentials);
       }
@@ -105,10 +114,39 @@ export default function StudentDashboard() {
   };
 
   const navItems = [
-    { icon: Award, label: 'My Credentials', active: true },
-    { icon: Settings, label: 'Profile Settings', active: false },
-    { icon: CheckCircle, label: 'Verify Tool', active: false },
-    { icon: LogOut, label: 'Disconnect Wallet', active: false, action: () => disconnect() },
+    {
+      icon: Award,
+      label: 'My Credentials',
+      active: !showProfileSettings && !showVerifyTool,
+      action: () => {
+        setShowProfileSettings(false);
+        setShowVerifyTool(false);
+      }
+    },
+    {
+      icon: Settings,
+      label: 'Profile Settings',
+      active: showProfileSettings,
+      action: () => {
+        setShowProfileSettings(true);
+        setShowVerifyTool(false);
+      }
+    },
+    {
+      icon: CheckCircle,
+      label: 'Verify Tool',
+      active: showVerifyTool,
+      action: () => {
+        setShowVerifyTool(true);
+        setShowProfileSettings(false);
+      }
+    },
+    {
+      icon: LogOut,
+      label: 'Disconnect Wallet',
+      active: false,
+      action: () => disconnect()
+    },
   ];
 
   const getReputationScore = (credentialCount: number): 'High' | 'Medium' | 'Low' => {
@@ -116,6 +154,10 @@ export default function StudentDashboard() {
     if (credentialCount >= 1) return 'Medium';
     return 'Low';
   };
+
+  const filteredCredentials = selectedCategory === 'All'
+    ? credentials
+    : credentials.filter((cert) => cert.category === selectedCategory);
 
   const reputationScore = getReputationScore(credentials.length);
 
@@ -299,58 +341,132 @@ export default function StudentDashboard() {
             </motion.div>
 
             {/* Credentials Grid */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <h2 className="text-2xl font-bold mb-6">Your Digital Backpack</h2>
+            {!showProfileSettings && !showVerifyTool && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <h2 className="text-2xl font-bold mb-6">Your Digital Backpack</h2>
 
-              {isLoading ? (
-                <div className="text-center py-12">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                    className="w-12 h-12 border-2 border-primary/20 border-t-primary rounded-full mx-auto mb-4"
-                  />
-                  <p className="text-muted-foreground">Loading your credentials...</p>
-                </div>
-              ) : showEmptyState ? (
-                <Card className="glass-card border-primary/20 py-12">
-                  <CardContent className="text-center">
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="space-y-4"
-                    >
-                      <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
-                        <Award className="h-12 w-12 text-primary/50" />
-                      </div>
-                      <h3 className="text-xl font-bold">Your Digital Backpack is empty.</h3>
-                      <p className="text-muted-foreground">
-                        Connect with your university to receive your first verified credential.
-                      </p>
-                      <Button
-                        className="mt-4 bg-gradient-to-r from-primary to-accent hover:opacity-90"
-                        onClick={() => navigate('/')}
+                {/* Category Filter */}
+                {credentials.length > 0 && (
+                  <div className="mb-6 flex flex-wrap gap-2">
+                    {CERTIFICATE_CATEGORIES.map((category) => (
+                      <button
+                        key={category}
+                        onClick={() => setSelectedCategory(category)}
+                        className={`px-4 py-2 rounded-lg transition-all ${
+                          selectedCategory === category
+                            ? 'bg-primary/30 text-primary border border-primary/50'
+                            : 'bg-primary/10 text-muted-foreground border border-primary/20 hover:bg-primary/20'
+                        }`}
                       >
-                        Explore Institutions
-                      </Button>
-                    </motion.div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {credentials.map((cert, index) => (
-                    <CredentialCard
-                      key={cert.id}
-                      certificate={cert}
-                      index={index}
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {isLoading ? (
+                  <div className="text-center py-12">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className="w-12 h-12 border-2 border-primary/20 border-t-primary rounded-full mx-auto mb-4"
                     />
-                  ))}
+                    <p className="text-muted-foreground">Loading your credentials...</p>
+                  </div>
+                ) : showEmptyState ? (
+                  <Card className="glass-card border-primary/20 py-12">
+                    <CardContent className="text-center">
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-4"
+                      >
+                        <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                          <Award className="h-12 w-12 text-primary/50" />
+                        </div>
+                        <h3 className="text-xl font-bold">Your Digital Backpack is empty.</h3>
+                        <p className="text-muted-foreground">
+                          Connect with your university to receive your first verified credential.
+                        </p>
+                        <Button
+                          className="mt-4 bg-gradient-to-r from-primary to-accent hover:opacity-90"
+                          onClick={() => navigate('/')}
+                        >
+                          Explore Institutions
+                        </Button>
+                      </motion.div>
+                    </CardContent>
+                  </Card>
+                ) : filteredCredentials.length === 0 ? (
+                  <Card className="glass-card border-primary/20 py-12">
+                    <CardContent className="text-center">
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-4"
+                      >
+                        <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                          <Award className="h-12 w-12 text-primary/50" />
+                        </div>
+                        <h3 className="text-xl font-bold">No credentials in this category</h3>
+                        <p className="text-muted-foreground">
+                          Try selecting a different category.
+                        </p>
+                      </motion.div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredCredentials.map((cert, index) => (
+                      <CredentialCard
+                        key={cert.id}
+                        certificate={cert}
+                        index={index}
+                      />
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Profile Settings View */}
+            {showProfileSettings && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <div className="max-w-2xl">
+                  <h2 className="text-2xl font-bold mb-6">Profile Settings</h2>
+                  <Card className="glass-card border-primary/20">
+                    <CardHeader>
+                      <CardTitle>Update Your Information</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ProfileSettingsForm address={address || ''} />
+                    </CardContent>
+                  </Card>
                 </div>
-              )}
-            </motion.div>
+              </motion.div>
+            )}
+
+            {/* Verify Tool View */}
+            {showVerifyTool && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <div className="max-w-2xl">
+                  <h2 className="text-2xl font-bold mb-6">Verify Credentials</h2>
+                  <VerifyToolComponent />
+                </div>
+              </motion.div>
+            )}
           </div>
         </main>
       </div>
