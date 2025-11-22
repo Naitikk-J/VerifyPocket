@@ -6,11 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAccount, useSignMessage } from 'wagmi';
 import { useNavigate } from 'react-router-dom';
-
-// --- Configuration ---
-// For demonstration purposes, we'll hardcode the admin's wallet address.
-// In a real-world application, this should be managed securely on the backend.
-const ADMIN_ADDRESS = '0xbe8C7A5ca922e31160f7C7E0964d3cb97DeaCaFd'; // Wallet address provided by the user
+import axios from 'axios';
+import { getApiUrl } from '@/lib/utils';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -27,10 +24,6 @@ export default function AdminLogin() {
   }, [navigate]);
 
   const handleLogin = async () => {
-    if (address?.toLowerCase() !== ADMIN_ADDRESS.toLowerCase()) {
-      setError('This wallet is not authorized for admin access.');
-      return;
-    }
     setIsLoading(true);
     setError('');
     try {
@@ -52,12 +45,22 @@ Issued At: ${new Date().toISOString()}`;
 
       const signature = await signMessageAsync({ message });
 
-      // --- Backend Verification (Simulated) ---
-      console.log("Admin sign-in successful (simulation):", { signature, message });
-      sessionStorage.setItem('isAdminLoggedIn', 'true');
-      sessionStorage.setItem('adminAddress', address || '');
+      // --- Backend Verification ---
+      const response = await axios.post(`${getApiUrl()}/api/admin/verify-signature`, { 
+        message, 
+        signature, 
+        address 
+      });
 
-      navigate('/admin/dashboard');
+      if (response.data.success) {
+        console.log("Admin sign-in successful:", { signature, message });
+        sessionStorage.setItem('isAdminLoggedIn', 'true');
+        sessionStorage.setItem('adminAddress', address || '');
+
+        navigate('/admin/dashboard');
+      } else {
+        setError('This wallet is not authorized for admin access.');
+      }
 
     } catch (err) {
       console.error("Admin sign-in error:", err);
@@ -120,7 +123,7 @@ Issued At: ${new Date().toISOString()}`;
                       onClick={handleLogin}
                       disabled={isLoading}
                     >
-                      {isLoading ? 'Check Wallet...' : 'Sign In as Admin'}
+                      {isLoading ? 'Verifying...' : 'Sign In as Admin'}
                     </Button>
                   </div>
                 )}

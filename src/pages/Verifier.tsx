@@ -1,34 +1,53 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Search, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import axios from 'axios';
+
+interface Certificate {
+    _id: string;
+    studentAddress: string;
+    course: string;
+    grade: string;
+    issuedBy: string;
+    hash: string;
+    issuedAt: string;
+}
+
+interface VerificationResult {
+    isValid: boolean;
+    credential?: Certificate;
+}
 
 export default function Verifier() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [credentialId, setCredentialId] = useState('');
-  const [verificationResult, setVerificationResult] = useState(null);
+  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleVerify = async () => {
-    if (!credentialId) return;
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const certId = params.get('certId');
+    if (certId) {
+      setCredentialId(certId);
+      handleVerify(certId);
+    }
+  }, [location.search]);
+
+  const handleVerify = async (id: string) => {
+    if (!id) return;
     setIsLoading(true);
     setVerificationResult(null);
 
-    // Simulate API call to verify credential
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const response = await axios.get('http://localhost:3001/api/credentials');
+    const credential = response.data.find((cred: Certificate) => cred.hash === id);
 
-    // Mock result - in a real app, this would be a real verification
-    if (credentialId.startsWith('0x123')) {
-      setVerificationResult({
-        isValid: true,
-        issuer: 'Metacrafters University',
-        student: '0xABC...DEF',
-        course: 'Advanced Web3 Security',
-        grade: 'A+',
-      });
+    if (credential) {
+      setVerificationResult({ isValid: true, credential });
     } else {
       setVerificationResult({ isValid: false });
     }
@@ -76,7 +95,7 @@ export default function Verifier() {
                        <Button 
                          size="lg"
                          className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 text-lg glow-border"
-                         onClick={handleVerify}
+                         onClick={() => handleVerify(credentialId)}
                          disabled={isLoading || !credentialId}
                         >
                          {isLoading ? 'Verifying...' : 'Verify Credential'}
@@ -95,24 +114,24 @@ export default function Verifier() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            {verificationResult.isValid ? (
+                            {verificationResult.isValid && verificationResult.credential ? (
                                 <div className="space-y-3">
                                     <p className="font-semibold text-lg text-success">Credential is Valid</p>
                                     <div>
                                         <p className="text-sm text-muted-foreground">Issued by:</p>
-                                        <p>{verificationResult.issuer}</p>
+                                        <p>{verificationResult.credential.issuedBy}</p>
                                     </div>
                                     <div>
                                         <p className="text-sm text-muted-foreground">Issued to:</p>
-                                        <p className='font-mono'>{verificationResult.student}</p>
+                                        <p className='font-mono'>{verificationResult.credential.studentAddress}</p>
                                     </div>
                                      <div>
                                         <p className="text-sm text-muted-foreground">Course:</p>
-                                        <p>{verificationResult.course}</p>
+                                        <p>{verificationResult.credential.course}</p>
                                     </div>
                                     <div>
                                         <p className="text-sm text-muted-foreground">Grade:</p>
-                                        <p>{verificationResult.grade}</p>
+                                        <p>{verificationResult.credential.grade}</p>
                                     </div>
                                 </div>
                             ) : (

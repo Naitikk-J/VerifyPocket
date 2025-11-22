@@ -13,7 +13,7 @@ export default function Landing() {
       icon: <GraduationCap className="h-12 w-12 text-primary" />,
       title: "Student Wallet",
       description: "Manage your academic and professional credentials.",
-      path: "/dashboard"
+      path: "/student/dashboard"
     },
     {
       icon: <Briefcase className="h-12 w-12 text-success" />,

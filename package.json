@@ -4,11 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm-run-all --parallel dev:client dev:server",
+    "dev:client": "vite",
+    "dev:server": "wait-on tcp:27017 && node -r dotenv/config --loader ts-node/esm src/server.ts",
     "build": "vite build",
-    "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:server": "node dist/server/main.js",
+    "db:start": "mkdir -p data/db && mongod --dbpath ./data/db"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -41,15 +44,20 @@
     "@radix-ui/react-tooltip": "^1.2.7",
     "@tanstack/react-query": "^5.90.10",
     "@types/crypto-js": "^4.2.2",
+    "axios": "^1.13.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
     "date-fns": "^3.6.0",
+    "dotenv": "^16.4.5",
     "embla-carousel-react": "^8.6.0",
+    "express": "^5.1.0",
     "framer-motion": "^12.23.24",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
+    "mongodb": "^6.21.0",
     "next-themes": "^0.3.0",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
@@ -70,6 +78,8 @@
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.16",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
@@ -80,10 +90,14 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "lovable-tagger": "^1.1.11",
+    "npm-run-all": "^4.1.5",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
+    "ts-node": "^10.9.2",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
-    "vite": "^5.4.19"
+    "vite": "^5.4.19",
+    "vite-plugin-run": "^0.5.0",
+    "wait-on": "^9.0.3"
   }
 }

@@ -8,27 +8,30 @@ import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from '@/components/ui/textarea';
-import QRCode from 'qrcode.react';
+import { QRCodeSVG } from 'qrcode.react';
 import SHA256 from 'crypto-js/sha256';
+import axios from 'axios';
+import { getApiUrl } from '@/lib/utils';
 
-// --- Mock Data ---
-const mockRecords = [
-  { id: 'cred_001', student: '0x1a2b...', course: 'Intro to Solidity', issued: '2023-10-26' },
-  { id: 'cred_002', student: '0x3c4d...', course: 'Advanced DApp Dev', issued: '2023-11-15' },
-  { id: 'cred_003', student: '0x5e6f...', course: 'DeFi Fundamentals', issued: '2023-12-01' },
-  { id: 'cred_004', student: '0x7g8h...', course: 'Web3 Security', issued: '2024-01-20' },
-];
+interface Certificate {
+    _id: string;
+    studentAddress: string;
+    course: string;
+    issuedAt: string;
+    hash: string;
+}
 
 interface CertificateResult {
   certHash: string;
-  txHash: string;
   qrUrl: string;
+  transactionId: string;
 }
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [adminAddress, setAdminAddress] = useState('');
   const [certificateResult, setCertificateResult] = useState<CertificateResult | null>(null);
+  const [records, setRecords] = useState<Certificate[]>([]);
 
   useEffect(() => {
     const isLoggedIn = sessionStorage.getItem('isAdminLoggedIn') === 'true';
@@ -38,8 +41,14 @@ export default function AdminDashboard() {
       navigate('/admin/login');
     } else {
       setAdminAddress(address);
+      fetchCredentials();
     }
   }, [navigate]);
+  
+  const fetchCredentials = async () => {
+      const response = await axios.get(`${getApiUrl()}/api/credentials`);
+      setRecords(response.data);
+  };
 
   const handleLogout = () => {
     sessionStorage.removeItem('isAdminLoggedIn');
@@ -56,33 +65,61 @@ export default function AdminDashboard() {
     e.currentTarget.reset();
   };
   
-  const handleIssueCertificate = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleIssueCertificate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const data = Object.fromEntries(formData.entries());
 
-    // 1. Create a unique hash for the certificate data
-    const dataString = JSON.stringify(data) + `-${Date.now()}`;
-    const certHash = SHA256(dataString).toString();
+    const certificateFile = formData.get('certificateFile') as File;
+    const photoFile = formData.get('photoFile') as File;
 
-    // 2. Simulate a transaction hash
-    const txHash = `0x${SHA256(certHash).toString().slice(0, 64)}`;
+    if (!certificateFile || certificateFile.size === 0 || !photoFile || photoFile.size === 0) {
+        alert("Please select both a certificate and a photo file.");
+        return;
+    }
 
-    // 3. Create a URL for the QR code
-    const verifierUrl = `${window.location.origin}/verifier?certId=${certHash}`;
-    
-    // Log file info to console (simulation)
-    console.log("Issuing Certificate with Files:", {
-      ...data,
-      certificateFile: (data.certificateFile as File).name,
-      studentPhoto: (data.studentPhoto as File).name,
-      certHash,
-      txHash
-    });
+    const readFileAsBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = (error) => reject(error);
+        });
+    };
 
-    // 4. Set results to display modal
-    setCertificateResult({ certHash, txHash, qrUrl: verifierUrl });
-    e.currentTarget.reset();
+    try {
+        const certificateBase64 = await readFileAsBase64(certificateFile);
+        const photoBase64 = await readFileAsBase64(photoFile);
+        
+        const formEntries = Object.fromEntries(formData.entries());
+
+        const textData: { [key: string]: any } = { ...formEntries };
+        delete textData.certificateFile;
+        delete textData.photoFile;
+
+        const dataToHash = {
+            ...textData,
+            certificate: certificateBase64,
+            photo: photoBase64,
+        };
+
+        const dataString = JSON.stringify(dataToHash) + `-${Date.now()}`;
+        const certHash = SHA256(dataString).toString();
+        const transactionId = SHA256(certHash).toString();
+
+        const verifierUrl = `${window.location.origin}/verifier?certId=${certHash}`;
+
+        const payload = { ...textData, hash: certHash };
+
+        await axios.post(`${getApiUrl()}/api/credentials`, payload);
+        
+        setCertificateResult({ certHash, qrUrl: verifierUrl, transactionId });
+        fetchCredentials();
+        e.currentTarget.reset();
+
+    } catch (error) {
+        console.error("Error issuing certificate:", error);
+        alert("Failed to issue certificate. An unexpected error occurred. Please check the console for details.");
+    }
   };
 
   if (!adminAddress) {
@@ -155,14 +192,16 @@ export default function AdminDashboard() {
                       <Input id="issuerTitle" name="issuerTitle" placeholder="e.g., Dean of Engineering" required />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="certificateFile">Upload Certificate (PDF/Image)</Label>
-                    <Input id="certificateFile" name="certificateFile" type="file" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="studentPhoto">Upload Student Photo</Label>
-                    <Input id="studentPhoto" name="studentPhoto" type="file" required />
-                  </div>
+				  <div className='grid grid-cols-2 gap-4'>
+					  <div className='space-y-2'>
+						<Label htmlFor='certificateFile'>Upload Certificate</Label>
+						<Input id='certificateFile' name='certificateFile' type='file' required />
+					  </div>
+					  <div className='space-y-2'>
+						<Label htmlFor='photoFile'>Upload Photo</Label>
+						<Input id='photoFile' name='photoFile' type='file' required />
+					  </div>
+				  </div>
                   <Button type="submit" className="w-full bg-primary text-primary-foreground glow-border">Issue Certificate</Button>
                 </form>
               </CardContent>
@@ -184,12 +223,12 @@ export default function AdminDashboard() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {mockRecords.map((rec) => (
-                            <TableRow key={rec.id}>
-                                <TableCell className='font-mono text-xs'>{rec.id}</TableCell>
-                                <TableCell className='font-mono text-xs'>{rec.student}</TableCell>
+                        {records.map((rec) => (
+                            <TableRow key={rec._id}>
+                                <TableCell className='font-mono text-xs'>{rec.hash.slice(0,10)}...</TableCell>
+                                <TableCell className='font-mono text-xs'>{rec.studentAddress.slice(0,10)}...</TableCell>
                                 <TableCell>{rec.course}</TableCell>
-                                <TableCell>{rec.issued}</TableCell>
+                                <TableCell>{new Date(rec.issuedAt).toLocaleDateString()}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
@@ -217,12 +256,12 @@ export default function AdminDashboard() {
                         <p className="font-mono break-all">{certificateResult.certHash}</p>
                     </div>
                     <div>
-                        <Label className="text-muted-foreground">Transaction Hash (Simulated)</Label>
-                        <p className="font-mono break-all">{certificateResult.txHash}</p>
+                        <Label className="text-muted-foreground">Transaction ID</Label>
+                        <p className="font-mono break-all">{certificateResult.transactionId}</p>
                     </div>
                 </div>
                 <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-lg">
-                    <QRCode value={certificateResult.qrUrl} size={160} />
+                    <QRCodeSVG value={certificateResult.qrUrl} size={160} />
                     <p className="text-xs text-black">Scan to Verify</p>
                 </div>
             </CardContent>

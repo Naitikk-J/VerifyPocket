@@ -7,6 +7,7 @@ import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
+import StudentDashboard from "./pages/StudentDashboard";
 import Verifier from "./pages/Verifier";
 import NotFound from "./pages/NotFound";
 
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/student/dashboard" element={<StudentDashboard />} />
           <Route path="/verifier" element={<Verifier />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
